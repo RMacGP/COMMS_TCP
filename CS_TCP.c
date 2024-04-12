@@ -236,6 +236,7 @@ int getIPaddress(char* hostName, struct in_addr* IPaddr, char* IPaddrStr)
     hints.ai_protocol = IPPROTO_TCP;  // using TCP protocol
 
     // Try to find the address of the host computer
+    
     retVal = getaddrinfo(hostName, NULL, &hints, &result);
     if (retVal != 0)  // attempt has failed
     {

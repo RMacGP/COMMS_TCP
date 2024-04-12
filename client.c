@@ -45,8 +45,11 @@ int main()
   int reqLen;                 // request string length
   int stop = 0;               // flag to control the loop
   char * loc = NULL;          // location of string
-  char serverIPstr[20];       // IP address of server as a string
-  int serverPort;             // server port number
+  char webAddress[30];        // Character web address the user inputs
+  struct in_addr server_in_addr;      // struct to hold the IP address of the server
+  char serverIPstr[30];       // IP address of server as a string
+  char web_directory[30];     // Directory from root of ip address in server
+  int serverPort = 80;             // server port number
   char request[MAXREQUEST+1];   // array to hold request from user
   char response[MAXRESPONSE+1]; // array to hold response from server
   char endResponse[] = "###";   // string used as end marker in response
@@ -61,25 +64,42 @@ int main()
   if (clientSocket == FAILURE)  // check for failure
     return 1;       // no point in continuing
 
+  /*
   // Get the details of the server from the user
   printf("\nEnter the IP address of the server (e.g. 137.43.168.123): ");
-  scanf("%20s", serverIPstr);  // get IP address as a string
+  scanf("%20s", serverIPstr);  // get IP address as a string`
+  */
+  
+  // Get the web address from the user
+  printf("\nEnter the web address you wish to access (e.g. http://web.simmons.edu/~grovesd/images/big-bear.png): ");
 
+  scanf("%30s", webAddress);  // get user web address as a string
+
+  printf("Please enter the directory of this address you would like to retrieve: ");
+
+  scanf("%30s", web_directory);
+
+  retVal = getIPaddress(webAddress, NULL, serverIPstr);
+  if (retVal == FAILURE)
+    return 1;
+
+  /*
   printf("\nEnter the port number on which the server is listening: ");
   scanf("%d", &serverPort);     // get port number as an integer
   fgets(request, MAXREQUEST, stdin);  // clear the input buffer
+  */
 
   // Now connect to the server
   retVal = TCPclientConnect(clientSocket, serverIPstr, serverPort);
   if (retVal < 0)  // failed to connect
     stop = 1;    // set the flag so skip directly to tidy-up section
 
-
 // ============== SEND REQUEST ======================================
 
   if (stop == 0)      // if we are connected
   {
     // Get user request and send it to the server
+    fflush(stdin);
     printf("\nEnter request (maximum %d bytes): ", MAXREQUEST-2);
     fgets(request, MAXREQUEST, stdin);  // read in request string
     /* The fgets() function reads characters until the enter key is
@@ -101,6 +121,10 @@ int main()
     /* Now send the request to the server over the TCP connection.
     send() arguments: socket identifier, array of bytes to send,
     number of bytes to send, and last argument of 0.  */
+    
+    char request = "GET /~grovesd/images/big-bear.png\r\nHost: www.web.simmons.edu\r\n\r\n"
+    reqLen = strlen(request);
+
     retVal = send(clientSocket, request, reqLen, 0);  // send bytes
     // retVal will be the number of bytes sent, or a problem indicator
 
