@@ -30,8 +30,8 @@
 #define ENDMARK 10       // the newline character
 
 // Size limits - these should be much bigger for a real application
-#define MAXREQUEST 40    // maximum size of request, in bytes
-#define MAXRESPONSE 36   // size of response array, in bytes
+#define MAXREQUEST 80    // maximum size of request, in bytes
+#define MAXRESPONSE 1000   // size of response array, in bytes
 
 
 int main()
@@ -49,6 +49,7 @@ int main()
   struct in_addr server_in_addr;      // struct to hold the IP address of the server
   char serverIPstr[30];       // IP address of server as a string
   char web_directory[30];     // Directory from root of ip address in server
+  char full_web_address[60];  // Web address + web directory
   int serverPort = 80;             // server port number
   char request[MAXREQUEST+1];   // array to hold request from user
   char response[MAXRESPONSE+1]; // array to hold response from server
@@ -79,6 +80,16 @@ int main()
 
   scanf("%30s", web_directory);
 
+  printf("%s", webAddress);
+  printf("\n%s\n", web_directory);
+
+  strcat(full_web_address, webAddress);
+  if (web_directory[0] != '/')
+    strcat(full_web_address, "/");
+  strcat(full_web_address, web_directory);
+
+  printf("%s\n", full_web_address);
+
   retVal = getIPaddress(webAddress, NULL, serverIPstr);
   if (retVal == FAILURE)
     return 1;
@@ -99,7 +110,7 @@ int main()
   if (stop == 0)      // if we are connected
   {
     // Get user request and send it to the server
-    fflush(stdin);
+
     printf("\nEnter request (maximum %d bytes): ", MAXREQUEST-2);
     fgets(request, MAXREQUEST, stdin);  // read in request string
     /* The fgets() function reads characters until the enter key is
@@ -122,9 +133,17 @@ int main()
     send() arguments: socket identifier, array of bytes to send,
     number of bytes to send, and last argument of 0.  */
     
-    char request = "GET /~grovesd/images/big-bear.png\r\nHost: www.web.simmons.edu\r\n\r\n"
+    // char request[] = "GET /~grovesd/images/big-bear.png\r\nHost: www.web.simmons.edu\r\n\r\n";
+    char request[100];
+    snprintf(request, 100, "GET /%s\r\nHost: %s\r\n\r\n", web_directory, webAddress);
+    // strcat(request, web_directory);
+    // strcat(request, "\r\nHost: ");
+    // strcat(request, webAddress);
+    // strcat(request, "\r\n\r\n");
+    printf("%s\n",request);
     reqLen = strlen(request);
 
+    printf("reqlen = %d\n", reqLen);
     retVal = send(clientSocket, request, reqLen, 0);  // send bytes
     // retVal will be the number of bytes sent, or a problem indicator
 
@@ -137,7 +156,11 @@ int main()
     else printf("Sent request with %d bytes, waiting for reply...\n", retVal);
   }
 
+
 // ============== RECEIVE RESPONSE ======================================
+
+  FILE *fptr;
+  fptr = fopen("request_rx.txt", "ab+");
 
   /* Loop to receive the entire response - it could be long!  This
   loop ends when the end of response string is found in the response,
@@ -165,7 +188,10 @@ int main()
     else if (numRx > 0)  // we got some data from the server
     {
       numBytes += numRx;    // add to byte counter
-
+      for (int i=0; i<numRx; i++) // yo where is the header
+      {
+        fwrite(&response[i], 1, sizeof(response[i]), fptr);
+      }
       // Print whatever has been received
       response[numRx] = 0; // convert the response array to a string
       // The array was made larger to leave room for this extra byte.
@@ -186,6 +212,7 @@ int main()
     } // end of if (numRx > 0)
 
   }   // end of while loop - repeat if data received but end not found
+  fclose(fptr);
 
 
 // ============== TIDY UP AND END ======================================
