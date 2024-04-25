@@ -133,9 +133,16 @@ int main()
     send() arguments: socket identifier, array of bytes to send,
     number of bytes to send, and last argument of 0.  */
     
-    // char request[] = "GET /~grovesd/images/big-bear.png\r\nHost: www.web.simmons.edu\r\n\r\n";
+    // char request[] = "GET /~grovesd/images/big-bear.png HTTP/1.1\r\nHost: www.web.simmons.edu\r\n\r\n";
     char request[100];
-    snprintf(request, 100, "GET /%s\r\nHost: %s\r\n\r\n", web_directory, webAddress);
+    snprintf(request, 100, "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n", web_directory, webAddress);
+    printf("\n%i\n", sizeof(request)/sizeof(request[0]));
+    char x = request[0];
+    for (int i=0; i<100; i++)
+    {
+      printf("%c", request[i]);
+    }
+    printf("\n\n");
     // strcat(request, web_directory);
     // strcat(request, "\r\nHost: ");
     // strcat(request, webAddress);
@@ -160,7 +167,7 @@ int main()
 // ============== RECEIVE RESPONSE ======================================
 
   FILE *fptr;
-  fptr = fopen("request_rx.txt", "ab+");
+  fptr = fopen("bigbigbear.png", "ab+");
 
   /* Loop to receive the entire response - it could be long!  This
   loop ends when the end of response string is found in the response,
