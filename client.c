@@ -28,10 +28,13 @@
 
 // Marker used in this example protocol
 #define ENDMARK 10       // the newline character
+#define CR 13       // the carriage return character
 
 // Size limits - these should be much bigger for a real application
 #define MAXREQUEST 80    // maximum size of request, in bytes
 #define MAXRESPONSE 1000   // size of response array, in bytes
+#define MAXHEADER 9000 // most HTTP servers have a cap of ~8KB on response headers
+                       // https://httpd.apache.org/docs/2.2/mod/core.html#limitrequestfieldsize
 
 
 int main()
@@ -44,6 +47,9 @@ int main()
   int numBytes = 0;           // number of bytes received in total
   int reqLen;                 // request string length
   int stop = 0;               // flag to control the loop
+  int findEndMarker = 0;      // Flag to control wether we should look for end of header marker
+  int contentLength = -1;
+  int headerLength = 0;     
   char * loc = NULL;          // location of string
   char webAddress[30];        // Character web address the user inputs
   struct in_addr server_in_addr;      // struct to hold the IP address of the server
@@ -136,17 +142,7 @@ int main()
     // char request[] = "GET /~grovesd/images/big-bear.png HTTP/1.1\r\nHost: www.web.simmons.edu\r\n\r\n";
     char request[100];
     snprintf(request, 100, "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n", web_directory, webAddress);
-    printf("\n%i\n", sizeof(request)/sizeof(request[0]));
-    char x = request[0];
-    for (int i=0; i<100; i++)
-    {
-      printf("%c", request[i]);
-    }
-    printf("\n\n");
-    // strcat(request, web_directory);
-    // strcat(request, "\r\nHost: ");
-    // strcat(request, webAddress);
-    // strcat(request, "\r\n\r\n");
+    
     printf("%s\n",request);
     reqLen = strlen(request);
 
@@ -166,13 +162,17 @@ int main()
 
 // ============== RECEIVE RESPONSE ======================================
 
-  FILE *fptr;
-  fptr = fopen("bigbigbear.png", "ab+");
+  FILE *outFile, *headerFile;
+  outFile = fopen("bearr", "wb"); // make sure to start from 0 because this append so filename could already exist
+  headerFile = fopen("header.txt", "w");
 
   /* Loop to receive the entire response - it could be long!  This
   loop ends when the end of response string is found in the response,
   or when the server closes the connection, or when a problem occurs. */
-  while (stop == 0)
+
+  int maxHeaderIterations = (MAXHEADER+MAXRESPONSE-1)/MAXRESPONSE;
+  int headerLoopCnt = 0;
+  while (stop == 0 && headerLoopCnt < maxHeaderIterations && numBytes-headerLength<contentLength)
   {
     /* Wait to receive bytes from the server, using the recv function.
     recv() arguments: socket identifier, array to hold received bytes,
@@ -194,10 +194,60 @@ int main()
     }
     else if (numRx > 0)  // we got some data from the server
     {
-      numBytes += numRx;    // add to byte counter
-      for (int i=0; i<numRx; i++) // yo where is the header
+
+
+      int skipHeader = 0;
+      if (findEndMarker >= 0)
       {
-        fwrite(&response[i], 1, sizeof(response[i]), fptr);
+        headerLoopCnt++;
+        for (int i=0; i<numRx; i++)
+        {
+          if (findEndMarker%2 == 0 && response[i]==CR)
+            findEndMarker++;
+          else if(findEndMarker%2 == 1 && response[i]==ENDMARK)
+            findEndMarker++;
+          else
+            findEndMarker=0;
+          if (findEndMarker == 4)
+          {
+            skipHeader = i+1;
+            headerLength = numBytes + i+1;
+            findEndMarker = -1;
+            break;
+          }
+          fwrite(&response[i], 1, sizeof(response[i]), headerFile);
+        }
+      }
+      
+      numBytes += numRx;    // add to byte counter
+
+      if (skipHeader > 0) // the header has finished being read and we should 
+      {
+        printf("searching inside header\n");
+        fclose(headerFile);
+        headerFile = fopen("header.txt", "r");
+        char word[150];
+        char matchStr[] = "Content-Length:";
+        while(fscanf(headerFile, "%s", word) != EOF) 
+        {
+          if(strcmp(word, matchStr) == 0) 
+          { 
+            fscanf(headerFile, "%i", &contentLength);
+            break;
+          } 
+        }
+        if (contentLength == -1) // failed to find content-length inside header FAILURE
+        {
+          printf("Failed to find Content Length in header\n");
+          return 1;
+        }
+      }
+
+      printf("\n");
+
+      for (int i = skipHeader; findEndMarker == -1 && i<numRx; i++)
+      {
+        fwrite(&response[i], 1, sizeof(response[i]), outFile);
       }
       // Print whatever has been received
       response[numRx] = 0; // convert the response array to a string
@@ -217,9 +267,8 @@ int main()
         stop = 1;	// set the flag to exit the loop
       }
     } // end of if (numRx > 0)
-
   }   // end of while loop - repeat if data received but end not found
-  fclose(fptr);
+  fclose(outFile);
 
 
 // ============== TIDY UP AND END ======================================

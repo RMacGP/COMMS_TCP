@@ -59,7 +59,7 @@ int main()
   int totalResp;      // total number of bytes sent as response
   enum stopValues {CONTIN, CLOSE, FINAL}; // values for stop variable
   int stop = CONTIN;       // variable to control the loops
-  int endCounter;     // count of consecutive end markers
+  int findEndMarker;       // counting end marker characters
   int i;              // used in for loop
   char request[MAXREQUEST+1];   // array to hold request from client
   char response[MAXRESPONSE+1]; // array to hold our response
@@ -89,7 +89,7 @@ int main()
     stop = CONTIN;  // initialise the stop signal for this connection
     numRecv = 0;    // initialise the receive counter
     totalReq = 0;   // initialise number of bytes in the request
-    endCounter = 0; // initialise the end marker counter
+    findEndMarker = 0; // initialise the end marker counter
     totalResp = 0;  // initialise the response byte counter
 
 
