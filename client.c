@@ -51,11 +51,12 @@ int main()
   int contentLength = -1;
   int headerLength = 0;     
   char * loc = NULL;          // location of string
-  char webAddress[30];        // Character web address the user inputs
+  char fullWebAddress[100];        // Character web address the user inputs
+  char webAddress[100];
   struct in_addr server_in_addr;      // struct to hold the IP address of the server
-  char serverIPstr[30];       // IP address of server as a string
-  char web_directory[30];     // Directory from root of ip address in server
-  char full_web_address[60];  // Web address + web directory
+  char serverIPstr[100];       // IP address of server as a string
+  char webDirectory[100];     // Directory from root of ip address in server
+  char fileSaveName[100];      // Name of the saved file
   int serverPort = 80;             // server port number
   char request[MAXREQUEST+1];   // array to hold request from user
   char response[MAXRESPONSE+1]; // array to hold response from server
@@ -80,21 +81,40 @@ int main()
   // Get the web address from the user
   printf("\nEnter the web address you wish to access (e.g. http://web.simmons.edu/~grovesd/images/big-bear.png): ");
 
-  scanf("%30s", webAddress);  // get user web address as a string
+  scanf("%100s", fullWebAddress);  // get user web address as a string
 
-  printf("Please enter the directory of this address you would like to retrieve: ");
+  char *httpFound = strstr(fullWebAddress, "http://"); // excluding https !
+  int startOfWebAddress = 0;
+  if (httpFound != NULL && httpFound == fullWebAddress)
+  {
+    startOfWebAddress = 7;
+  }
+  strcpy(webAddress, fullWebAddress+startOfWebAddress);
+  
+  // maybe implement another check to filter out users trying to use https
+  char* findSlash = strchr(webAddress+startOfWebAddress, '/'); // find first instance of / after 
+  if (findSlash == NULL)
+  {
+    webDirectory[0] = '/';
+    webDirectory[1] = '\0';
+  }
+  else
+  {
+    strncpy(webDirectory, findSlash, strlen(webAddress)-(findSlash-webAddress));
+    webDirectory[strlen(webAddress)-(findSlash-webAddress)] = '\0';
+    webAddress[findSlash-webAddress] = '\0';
+  }
 
-  scanf("%30s", web_directory);
+  // printf("Please enter the directory of this address you would like to retrieve: ");
+
+  // scanf("%100s", webDirectory);
+
+  printf("Please enter the name of the file to save as: ");
+
+  scanf("%100s", fileSaveName);
 
   printf("%s", webAddress);
-  printf("\n%s\n", web_directory);
-
-  strcat(full_web_address, webAddress);
-  if (web_directory[0] != '/')
-    strcat(full_web_address, "/");
-  strcat(full_web_address, web_directory);
-
-  printf("%s\n", full_web_address);
+  printf("\n%s\n", webDirectory);
 
   retVal = getIPaddress(webAddress, NULL, serverIPstr);
   if (retVal == FAILURE)
@@ -140,8 +160,8 @@ int main()
     number of bytes to send, and last argument of 0.  */
     
     // char request[] = "GET /~grovesd/images/big-bear.png HTTP/1.1\r\nHost: www.web.simmons.edu\r\n\r\n";
-    char request[100];
-    snprintf(request, 100, "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n", web_directory, webAddress);
+    char request[250];
+    snprintf(request, 250, "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", webDirectory, webAddress);
     
     printf("%s\n",request);
     reqLen = strlen(request);
@@ -163,7 +183,7 @@ int main()
 // ============== RECEIVE RESPONSE ======================================
 
   FILE *outFile, *headerFile;
-  outFile = fopen("bearr", "wb"); // make sure to start from 0 because this append so filename could already exist
+  outFile = fopen(fileSaveName, "wb"); // make sure to start from 0 because this append so filename could already exist
   headerFile = fopen("header.txt", "w");
 
   /* Loop to receive the entire response - it could be long!  This
