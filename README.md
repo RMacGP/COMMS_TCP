@@ -4,9 +4,9 @@ A++ eskettit
 lol this is khaleeb
 
 ## TODO
-* any web address input and break up into ip and directory
+* ~~any web address input and break up into ip and directory~~
 * filename save as last thing in directory
-* allow user to enter no directory
+* ~~allow user to enter no directory~~
 * chunked-transfer encoding??
 
 ## Testing and Redo
