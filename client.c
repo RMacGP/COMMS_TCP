@@ -172,7 +172,7 @@ int main()
 
   int maxHeaderIterations = (MAXHEADER+MAXRESPONSE-1)/MAXRESPONSE;
   int headerLoopCnt = 0;
-  while (stop == 0 && headerLoopCnt < maxHeaderIterations && numBytes-headerLength<contentLength)
+  while (stop == 0 && headerLoopCnt < maxHeaderIterations && (headerLoopCnt == 0 ? 1 : numBytes-headerLength<contentLength))
   {
     /* Wait to receive bytes from the server, using the recv function.
     recv() arguments: socket identifier, array to hold received bytes,
@@ -223,7 +223,6 @@ int main()
 
       if (skipHeader > 0) // the header has finished being read and we should 
       {
-        printf("searching inside header\n");
         fclose(headerFile);
         headerFile = fopen("header.txt", "r");
         char word[150];
@@ -232,18 +231,20 @@ int main()
         {
           if(strcmp(word, matchStr) == 0) 
           { 
-            fscanf(headerFile, "%i", &contentLength);
-            break;
+            if (fscanf(headerFile, "%i", &contentLength) != 1)
+            {
+              contentLength = FAILURE;
+              break;
+            }
           } 
         }
-        if (contentLength == -1) // failed to find content-length inside header FAILURE
+        if (contentLength == FAILURE) // failed to find content-length inside header FAILURE
         {
           printf("Failed to find Content Length in header\n");
           return 1;
         }
+        fclose(headerFile);
       }
-
-      printf("\n");
 
       for (int i = skipHeader; findEndMarker == -1 && i<numRx; i++)
       {
@@ -252,7 +253,9 @@ int main()
       // Print whatever has been received
       response[numRx] = 0; // convert the response array to a string
       // The array was made larger to leave room for this extra byte.
+
       printf("\nReceived %d bytes from the server:\n|%s|\n", numRx, response);
+
       /* Note the response is printed between bars,
       to make it easy to see where it begins and ends. */
 
