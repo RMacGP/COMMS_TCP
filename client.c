@@ -101,6 +101,7 @@ int main()
   else
   {
     strncpy(webDirectory, findSlash, strlen(webAddress)-(findSlash-webAddress));
+    webDirectory[strlen(webAddress)-(findSlash-webAddress)] = '\0';
     webAddress[findSlash-webAddress] = '\0';
   }
 

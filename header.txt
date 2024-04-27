@@ -1,7 +1,10 @@
-HTTP/1.1 400 Bad Request
-Date: Sat, 27 Apr 2024 18:00:20 GMT
+HTTP/1.1 200 OK
+Date: Sat, 27 Apr 2024 18:07:51 GMT
 Server: Apache
-Content-Type: text/html; charset=iso-8859-1
-Content-Length: 226
-Connection: close
+Last-Modified: Tue, 26 Jan 2016 03:17:08 GMT
+ETag: "45b7-52a341edcb500"
+Accept-Ranges: bytes
+Content-Type: image/png
+Content-Length: 17847
+Connection: keep-alive
 
