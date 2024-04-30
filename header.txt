@@ -1,10 +1,9 @@
 HTTP/1.1 200 OK
-Date: Sat, 27 Apr 2024 18:07:51 GMT
-Server: Apache
-Last-Modified: Tue, 26 Jan 2016 03:17:08 GMT
-ETag: "45b7-52a341edcb500"
+Date: Sun, 28 Apr 2024 21:43:41 GMT
+Server: Apache/2.4.54 (Unix)
+Last-Modified: Mon, 29 Jul 2013 15:52:08 GMT
+ETag: "1c80e8-4e2a879853a00"
 Accept-Ranges: bytes
-Content-Type: image/png
-Content-Length: 17847
-Connection: keep-alive
+Content-Length: 1868008
+Content-Type: application/pdf
 

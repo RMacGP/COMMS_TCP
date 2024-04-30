@@ -32,7 +32,7 @@
 
 // Size limits - these should be much bigger for a real application
 #define MAXREQUEST 80    // maximum size of request, in bytes
-#define MAXRESPONSE 1000   // size of response array, in bytes
+#define MAXRESPONSE 10000   // size of response array, in bytes
 #define MAXHEADER 9000 // most HTTP servers have a cap of ~8KB on response headers
                        // https://httpd.apache.org/docs/2.2/mod/core.html#limitrequestfieldsize
 
@@ -189,17 +189,30 @@ int main()
   /* Loop to receive the entire response - it could be long!  This
   loop ends when the end of response string is found in the response,
   or when the server closes the connection, or when a problem occurs. */
-
-  int maxHeaderIterations = (MAXHEADER+MAXRESPONSE-1)/MAXRESPONSE;
+  int cnt = 0;
+  int byteCnter[50];
   int headerLoopCnt = 0;
-  while (stop == 0 && headerLoopCnt < maxHeaderIterations && (headerLoopCnt == 0 ? 1 : numBytes-headerLength<contentLength))
+  while (stop == 0)
   {
+
+    // check if the client should close the connection early before attempting to receive bytes
+    if (findEndMarker != -1 && numBytes > MAXHEADER) // we have not yet found header but the number of bytes received exceeds max header size
+    {
+      printf("\n*** Header not found");
+      break;
+    }
+    else if (findEndMarker == -1 && numBytes - headerLength >= contentLength) // we have already received the amount of bytes indicated in the hdeader 
+    {
+      printf("\nDetected that all bytes have been received, client closing connection.\n");
+      break;
+    }
+
     /* Wait to receive bytes from the server, using the recv function.
     recv() arguments: socket identifier, array to hold received bytes,
     maximum number of bytes to receive, last argument 0.
     Normally, recv() will not return until it receives at least one byte */
     numRx = recv(clientSocket, response, MAXRESPONSE, 0);
-    // numRx will be number of bytes received, or a problem indicator
+    // numRx will be number of bytes received, or a problem indcator
 
     if( numRx == SOCKET_ERROR)  // check for problem
     {
@@ -240,6 +253,7 @@ int main()
       }
       
       numBytes += numRx;    // add to byte counter
+      byteCnter[cnt++] = numRx;
 
       if (skipHeader > 0) // the header has finished being read and we should 
       {
@@ -289,11 +303,23 @@ int main()
         printf("Received a total of %d bytes from the server\n", numBytes);
         stop = 1;	// set the flag to exit the loop
       }
+      printf("numBytes = %i, headerLength = %i, contentLength = %i, headerLoopCount = %i\n", numBytes, headerLength, contentLength, headerLoopCnt);
     } // end of if (numRx > 0)
   }   // end of while loop - repeat if data received but end not found
   fclose(outFile);
 
-
+  printf("\n\nThe number of bytes received on each loop iteration was:\t");
+  FILE *byte_data;
+  byte_data = fopen("out_bytedata.txt", "a");
+  for (int i=0; i<cnt; i++)
+  {
+    if (i+1 < cnt && i != 0)
+    {
+      fprintf(byte_data, "%i ", byteCnter[i]);
+    }
+    printf("%i ", byteCnter[i]);
+  } printf("\n");
+  fclose(byte_data);
 // ============== TIDY UP AND END ======================================
 
   /* A better client might loop to allow another request to be sent.
