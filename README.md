@@ -20,3 +20,8 @@ what to write about in testing
 * how it worked when requesting an image through https from thejournal.ie
 * how we chose maximum request size & testing process, if we do 8000 bytes what happens?
 
+
+
+* conclusion write about chunked transfer encoding specifically mentioning certain aspects
+* introduction include goals
+*   
