@@ -1,21 +1,18 @@
 /*  EEEN20060 Communication Systems
-    Simple TCP client program, to demonstrate the basic concepts,
-    using IP version 4.  This is the Linux version.
-
-    The client program asks for details of the server, and tries
-    to connect.  Then it gets a request string from the user,
-    and sends this to the server.  Then it waits for a response
-    from the server, which could be quite long, so it is received
-    in sections.  This continues until the string ### is found
-    in the server response, or the server closes the connection.
-    Then the client program tidies up and exits.
-
-    This program is not robust - if a problem occurs, it just
-    tidies up and exits, with no attempt to fix the problem.  */
+    Group 26
+      Ruadhán Mac Giolla Phádraig 22440322
+      Caleb Ryan 22432254
+    The program:
+      - Gets user input of web address url, and the file name to save as
+      - Connects to the server after processing the user input and retrieving the ip address
+      - Sends a request built from the user input
+      - Processes the response from the server, including finding the content length from the header
+      - saves the file data after header to file with user inputted filename
+      - closes file, and goes back to first bullet point if user enters 'y' to go again
+*/
 
 #include <stdio.h>		 // for input and output functions
 #include <string.h>	     // for string handling functions
-#include <time.h>
 
 #include <sys/socket.h>	 // Linux socket functions and structs
 #include <netdb.h>		// Linux getaddrinfo() and related items
@@ -38,22 +35,25 @@
                        // https://httpd.apache.org/docs/2.2/mod/core.html#limitrequestfieldsize
 
 
-// Create variables needed by this function
-// SOCKET clientSocket = INVALID_SOCKET;  // identifier for the client socket, Windows
-
-char fullWebAddress[100];        // Character web address the user inputs
-char webAddress[100];
-char serverIPstr[100];       // IP address of server as a string
-char webDirectory[100];     // Directory from root of ip address in server
-char fileSaveName[100];      // Name of the saved file
-int serverPort = 80;             // server port number
+// Create global variables needed by the program
+// Their values need not be cleared every time we run downloadHttpFile again
+struct in_addr server_in_addr;// struct to hold the IP address of the server
+int retVal;                   // return value from various functions
+int numRx;                    // number of bytes received this time
+char fullWebAddress[100];     // array to hold full web address inputted by user as a string
+char webAddress[100];         // array to contain the web address excluding http:// prefix and stopping after top-level domain (.ie/.com) as a string
+char serverIPstr[100];        // array to hold IP address of server as a string
+char webDirectory[100];       // array to hold directory and file of GET request on server as a string (everyhting after top-level domain)
+char fileSaveName[100];       // array to hold user inputted name of file as a string
+int serverPort = 80;          // server port number (80 for http)
 char request[MAXREQUEST+1];   // array to hold request from user
 char response[MAXRESPONSE+1]; // array to hold response from server
-char header[MAXHEADER+1];
+char header[MAXHEADER+1];     // array to hold http response header from server
 
 
 /*
 http://home.datacomm.ch/t_wolf/tw/c/getting_input.html
+This function overcomes all challenges posed by scanf and fgets including flushing stdin
 */
 char *read_line (char *buf, size_t length, FILE *f)
   /**** Read at most 'length'-1 characters from the file 'f' into
@@ -81,13 +81,18 @@ char *read_line (char *buf, size_t length, FILE *f)
   return p;
 } /* end read_line */
 
+
 int downloadHttpFile()
 {
-
+  /*  Called from main() to 
+    - Process user input (get webAddress / directory)
+    - Create http request
+    - send http request
+    - process http respose
+    - save http response to file
+  */
+  // These variables were not declared globally as their starting value can be important
   SOCKET clientSocket = SOCKET_ERROR;  // identifier for the client socket, Linux
-  struct in_addr server_in_addr;      // struct to hold the IP address of the server
-  int retVal;                 // return value from various functions
-  int numRx;                  // number of bytes received this time
   int numBytes = 0;           // number of bytes received in total
   int reqLen;                 // request string length
   int stop = 0;               // flag to control the loop
@@ -99,46 +104,42 @@ int downloadHttpFile()
   if (clientSocket == FAILURE)  // check for failure
     return 1;       // no point in continuing
 
-  // scanf("%100s", fullWebAddress);  // get user web address as a string
-
-  char *httpFound = strstr(fullWebAddress, "http://"); // excluding https !
-  int startOfWebAddress = 0;
-  if (httpFound != NULL && httpFound == fullWebAddress)
+  char *httpFound = strstr(fullWebAddress, "http://");    // pointer to first occurance of "http://" in fullWebAdress, returns NULL if not found
+  int startOfWebAddress = 0;                              // index of where web address starts after http:// It has value 0 if http:// is not at start, and 7 if it is
+  if (httpFound != NULL && httpFound == fullWebAddress)   // if it is found AND equal to fullWebAddress (at the start of string, this is a pointer to the first character in the string)
   {
-    startOfWebAddress = 7;
+    startOfWebAddress = 7;                                // Since we found http:// at the start, we set the index startOfWebAddress to 7 so http:// can be skipped later on
   }
-  strcpy(webAddress, fullWebAddress+startOfWebAddress);
+  // webAddress stores the address without 'http://'. If it wasn't there to begin with then it will be the same as fullWebAddress
+  strcpy(webAddress, fullWebAddress+startOfWebAddress);   // We are copying the string (fullWebAddress+startOfWebAddress) into webAddress.
+  // fullWebAddress is a pointer to the first element, and startOfWebAddress offsets the pointer by 7 if 'http://' was in fullWebaddress otherwise by 0 (it doesn't offset it)
   
-  // maybe implement another check to filter out users trying to use https
-  char* findSlash = strchr(webAddress+startOfWebAddress, '/'); // find first instance of / after  // get rid of startOfWebaddress
-  if (findSlash == NULL)
+  // findSlash is a pointer to the first occurance of a '/' char in webAddress. It is NULL otherwise
+  char* findSlash = strchr(webAddress, '/'); // find first instance of '/', remember this string will not contain 'http://' anymore
+  if (findSlash == NULL)                                  // We did not find a slash
   {
+    /*  webDirectory stores everything after the TLD (top-level domain). In the case where the user 
+        did not enter a directory (eg. faraday1.ucd.ie does not have directory specified whereas
+        faraday.ucd.ie/contact.html does), then we set webDirectory to '/'. Why? because for the
+        purpose of our http request, it will need to be GET / HTTP/1.1, where the slash between
+        GET and HTTP/1.1 is webDirectory. */
     webDirectory[0] = '/';
-    webDirectory[1] = '\0';
+    webDirectory[1] = '\0';                               // Terminating character to make it a string
   }
-  else
+  else                                                    // We did find a slash
   {
-    strncpy(webDirectory, findSlash, strlen(webAddress)-(findSlash-webAddress));
-    webDirectory[strlen(webAddress)-(findSlash-webAddress)] = '\0';
-    webAddress[findSlash-webAddress] = '\0';
+    /*strncpy allows us to copy n characters from one string into another. In our case we are copying everything from and including the slash to the right from webAddress into webDirectory
+      findSlash is a pointer to the forward slash after the TLD, and directoryLength [strlen(webAddress)-(findSlash-webAddress)] is the number of characters including the slash to the end of webAddress
+      So, we copy directoryLength characters from the findSlash pointer of webAddress into webDirectory */
+    int directoryLength = strlen(webAddress) - (findSlash-webAddress);
+    strncpy(webDirectory, findSlash, directoryLength);
+    webDirectory[directoryLength] = '\0';                 // strncpy does not add a terminating character so we do this to make it a string
+    webAddress[findSlash-webAddress] = '\0';              // we can now truncate the directory part of webAddress by adding the terminating character where we found the first slash
   }
 
-  //  printf("Please enter the directory of this address you would like to retrieve: ");
-
-  // scanf("%100s", webDirectory);
-
-  //  printf("%s", webAddress);
-  //  printf("\n%s\n", webDirectory);
-
-  retVal = getIPaddress(webAddress, NULL, serverIPstr);
-  if (retVal == FAILURE)
+  retVal = getIPaddress(webAddress, NULL, serverIPstr);    // We try and get the IP address using webAddress
+  if (retVal == FAILURE)                                   // Did not succeed in finding it, return 1.
     return 1;
-
-  /*
-   printf("\nEnter the port number on which the server is listening: ");
-  scanf("%d", &serverPort);     // get port number as an integer
-  fgets(request, MAXREQUEST, stdin);  // clear the input buffer
-  */
 
   // Now connect to the server
   retVal = TCPclientConnect(clientSocket, serverIPstr, serverPort);
@@ -149,26 +150,16 @@ int downloadHttpFile()
 
   if (stop == 0)      // if we are connected
   {
-
-    reqLen = strlen(request);  // find the length of the request
-
-    /* Put two end markers at the end of the request.  The array
-    was made large enough to allow an extra character to be added.  */
-    request[reqLen-1] = ENDMARK;  // end marker in last position
-    request[reqLen] = ENDMARK;  // add another end marker
-    reqLen++; // the string is now one byte longer
-    request[reqLen] = 0;   // add a new end of string marker
-
-    /* Now send the request to the server over the TCP connection.
-    send() arguments: socket identifier, array of bytes to send,
-    number of bytes to send, and last argument of 0.  */
     
-    // char request[] = "GET /~grovesd/images/big-bear.png HTTP/1.1\r\nHost: www.web.simmons.edu\r\n\r\n";
     snprintf(request, MAXREQUEST, "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", webDirectory, webAddress);
 
     printf("REQUEST: %s", request);
     
-    reqLen = strlen(request);
+
+    /* Now send the request to the server over the TCP connection.
+    send() arguments: socket identifier, array of bytes to send,
+    number of bytes to send, and last argument of 0.  */
+    reqLen = strlen(request);                         // get request length
     retVal = send(clientSocket, request, reqLen, 0);  // send bytes
     // retVal will be the number of bytes sent, or a problem indicator
 
@@ -185,14 +176,14 @@ int downloadHttpFile()
 
 // ============== RECEIVE RESPONSE ======================================
 
-  FILE *outFile, *headerFile;
-  outFile = fopen(fileSaveName, "wb");
+  FILE *outFile;                        // Declare file pointer to output file
+  outFile = fopen(fileSaveName, "wb");  // Open output file, in write binary mode. The file will be craeted if it didn't exist before, and overwritten if it did.
 
   /* Loop to receive the entire response - it could be long!  This
-  loop ends when the end of response string is found in the response,
+  loop ends when it is detected that we have received contentLength bytes after header,
   or when the server closes the connection, or when a problem occurs. */
-  int endOfHeaderIdx = 0;
-  while (stop == 0)
+  int endOfHeaderIdx = 0;               // When we find the header during the first iteration of the loop we set this as the index after the header so we can skip the header while saving the file
+  while (stop == 0)                     // Stop will be set to 1 within the loop when we experience and error and want to exit the loop
   {
 
     /* Wait to receive bytes from the server, using the recv function.
@@ -218,17 +209,17 @@ int downloadHttpFile()
 
       if (numBytes == 0) // first iteration of loop, we should find header end marker
       {
-        response[MAXRESPONSE] = '\0';
-        char *endmarker = strstr(response, "\r\n\r\n");
-        char *findContentLenght = strstr(response, "Content-Length:");
-        if (endmarker == NULL || findContentLenght == NULL)
+        response[MAXRESPONSE] = '\0';                                   // make response a string so we can use string.h functions on it
+        char *endmarker = strstr(response, "\r\n\r\n");                 // return pointer to first occurance of "\r\n\r\n" (endmarker) in the string or NULL otherwise
+        char *findContentLenght = strstr(response, "Content-Length:");  // return pointer to first occurance of "Content-Length" in the string or NULL otherwise
+        if (endmarker == NULL || findContentLenght == NULL)             // If either of these pointers are NULL either we did not receive a header or it is not as expected
         {
           printf("\n*** Did not receive an appropriate header\n");
           stop = 1;
-          break;
+          break;                                                        // We use break here to avoid writing anything and the numBytes read detection. (although harmless, who knows about future undefined behaviour
         }
-        headerLength = (endmarker+4) - response;
-        if (sscanf(findContentLenght+15, " %i\n", &contentLength) != 1)
+        headerLength = (endmarker+4) - response;                        // Length of header in bytes is the index of the pointer to first \r in end marker + 4 - response pointer
+        if (sscanf(findContentLenght+15, " %i\n", &contentLength) != 1) // If we don't read 1 integer into contentLength (sscanf returns number of successfull scans)
         {
           printf("\n*** Could not extract content-length from header\n");
           stop = 1;
@@ -236,18 +227,18 @@ int downloadHttpFile()
         }
       }
       
-
+      /*  We save all bytes into outFile. If this is our first iteration of the loop then numBytes == 0, and we start the index at headerLength in order to skip all bytes contained in the header */
       for (int i = (numBytes == 0 ? headerLength : 0); i<numRx; i++)
       {
-        fwrite(&response[i], 1, sizeof(response[i]), outFile);
+        fwrite(&response[i], 1, sizeof(response[i]), outFile);          // Write response[i], 1 char, of size 1 byte, to file outFile
       }
       numBytes += numRx;    // add to byte counter
   
       // check if the client should close the connection early before attempting to receive bytes
-      if (numBytes != 0 && numBytes - headerLength >= contentLength) // we have already received the amount of bytes indicated in the hdeader 
+      if (numBytes != 0 && numBytes - headerLength >= contentLength) // we have already received the amount of bytes indicated in the header 
       {
         printf("\nDetected that all bytes have been received.\n");
-        stop = 1;
+        break;                                                           // In this instance we don't set stop = 1 as it was successfull and stop will be our return value
       }
 
       // // Print whatever has been received
@@ -257,21 +248,18 @@ int downloadHttpFile()
       // printf("\nReceived %d bytes from the server:\n|%s|\n", numRx, response);
       // /* Note the response is printed between bars,
       // to make it easy to see where it begins and ends. */
+
     } // end of if (numRx > 0)
   }   // end of while loop - repeat if data received but end not found
   
   // ============== TIDY UP AND END ======================================
-
-  /* A better client might loop to allow another request to be sent.
-  This simple client just stops after the full response has been
-  received from the server. */
 
   printf("\nClient is closing the connection...\n");
 
   // Close the socket and shut down the WSA system
   TCPcloseSocket(clientSocket);
 
-  return SUCCESS;
+  return stop;      // we only set stop = 1 in instances where the function failed to download the file, so return 1 = failure, while return 0 = success
 } 
 
 int main()
@@ -280,21 +268,30 @@ int main()
   // Print starting message
   printf("\nCommunication Systems client program\n\n");
   
-  char yesOrNo[2];
+  char yesOrNo[2];   // buffer to hold user input
+  /* We chose a do-while loop as it would execute the block before checking uesr input to go again*/
   do
   {
     // Get the web address from the user
-    printf("\nEnter the full web address you  would like to access (maximum %d bytes): ", MAXREQUEST-2);
-    read_line(fullWebAddress, MAXREQUEST, stdin);
-    printf("Please enter the name of the file to save as: ");
-    read_line(fileSaveName, 100, stdin);
+    // Some examples are: http://faraday1.ucd.ie/archive/thesis/masterthesis_federico_milano.pdf, or faraday1.ucd.ie or faraday1.ucd.ie/, or web.simmons.edu/~grovesd/images/big-bear.png
+    printf("\nEnter the full web address you  would like to access (maximum %d bytes): ", MAXREQUEST-2); // prompt user to enter full web address
+    read_line(fullWebAddress, MAXREQUEST, stdin);                    // read a maximum of MAXREQUEST chars from stdin into fullWebAddress
+    printf("Please enter the name of the file to save as: ");        // prompt user to enter filename
+    read_line(fileSaveName, 100, stdin);                             // read a maximum of 100 chars from stdin into fileSaveName
 
-    downloadHttpFile();
-    printf("Your downloaded file has been saved to this directory as %s! To download another file enter 'y', otherwise enter any other character to end: ", fileSaveName);
-    read_line(yesOrNo, 2, stdin);
-  }while (yesOrNo[0] == 'y');
+    if (downloadHttpFile())                                          // if downloadHttpFile() evaluates as false (returns stop = 0), it failed
+    {
+      printf("FAILURE, we're sorry we could not download your file. Please recheck your input and try again, or try again later."); // #saysorry
+    }
+    else  // yippee! The program believes it was successfull
+    {
+      printf("Your downloaded file has been saved to this directory as %s!", fileSaveName);
+    }
+    printf("To download another file enter 'y', otherwise enter any other character to end: "); // prompt the user to enter 'y' if they would like to go again
+    read_line(yesOrNo, 2, stdin);                                                               // read a maximum of 2 chars (y\n) from stdin into yesOrNo
+  }while (yesOrNo[0] == 'y');                                                                   // while yesOrNo[0] == 'y', we run everything inside the do loop.
 
-  printf("\nSee you soon !!\n\n");
+  printf("\nSee you soon :)\n\n"); // End of program
 
   return 0;
 }
